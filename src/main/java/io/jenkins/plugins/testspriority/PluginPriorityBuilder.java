@@ -317,13 +317,13 @@ public class PluginPriorityBuilder extends Builder implements SimpleBuildStep {
                 System.out.println("GET PROJECT");
                 JSONObject projectResult = plugin.getProject();
                 if (projectResult.size() == 0) {
-                    return FormValidation.ok("Projet existant spécifié, les informations seront complétées");
+                    return FormValidation.ok("Nouveau projet spécifié, il sera créé lors du build");
                 } else {
                     Object status = projectResult.get("status");
                     if (status!=null && status.toString().equals("404")){
-                        return FormValidation.ok("Projet existant spécifié, les informations seront complétées");
-                    }else{
                         return FormValidation.ok("Nouveau projet spécifié, il sera créé lors du build");
+                    }else{
+                        return FormValidation.ok("Projet existant spécifié, les informations seront complétées");
 
                     }
                 }
