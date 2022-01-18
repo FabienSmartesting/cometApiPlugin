@@ -7,7 +7,7 @@ Plugin for access to Comet priority test API
 ## Getting started
 
 
-![](Priority plugin.jpeg)
+![Alt Plugin Usage](./Priority plugin.jpeg)
 
 ## Issues
 
