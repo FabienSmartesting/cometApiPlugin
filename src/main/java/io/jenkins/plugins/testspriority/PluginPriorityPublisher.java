@@ -6,8 +6,8 @@ import hudson.Launcher;
 import hudson.model.*;
 import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.Publisher;
-import org.apache.hc.client5.http.classic.methods.HttpPatch;
-import org.apache.hc.core5.http.io.entity.StringEntity;
+import okhttp3.MediaType;
+import okhttp3.RequestBody;
 import org.jenkinsci.Symbol;
 import org.kohsuke.stapler.DataBoundConstructor;
 
@@ -63,15 +63,12 @@ public class PluginPriorityPublisher  extends Publisher {
                 if (filePath.getName().equals(fileName)){
                     String content = filePath.readToString();
                     foundFile=true;
-                    StringEntity entity = new StringEntity(content);
                     String uri = pluginPriorityBuilder.getUrlService() + "/projects/" + pluginPriorityBuilder.getProjectName() + "/testCycles/"+buildNumber+"/suite";
-                    final HttpPatch httpPatch = new HttpPatch(uri);
-                    httpPatch.setHeader("Accept", "application/json");
-                    httpPatch.setHeader("Content-type", "application/json");
-                    httpPatch.setEntity(entity);
+                    MediaType mediaType = MediaType.parse("application/json");
+                    RequestBody body = RequestBody.create(mediaType, content);
                     try {
                         listener.getLogger().println("Envoi des résultats au serveur");
-                        pluginPriorityBuilder.executeRequest(httpPatch);
+                        pluginPriorityBuilder.executeRequest(uri, "PATCH", body);
                     }catch (Exception e){
                         listener.getLogger().println("Envoi des résultats au serveur en échec");
                         System.out.println(e.getMessage());

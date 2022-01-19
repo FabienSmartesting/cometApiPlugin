@@ -11,6 +11,7 @@ public class PluginPrioTest {
     public JenkinsRule jenkins = new JenkinsRule();
 
     final String fileName = "Bobby";
+    final String fileNameResult = "Bobby";
     final String urlService = "Test";
     final String accessId = "Test";
     final String secretKey ="aaabbb" ;
@@ -21,7 +22,7 @@ public class PluginPrioTest {
     @Test
     public void testBuild() throws Exception {
         FreeStyleProject project = jenkins.createFreeStyleProject();
-        PluginPriorityBuilder builder = new PluginPriorityBuilder(fileName, urlService, accessId, secretKey, projectName);
+        PluginPriorityBuilder builder = new PluginPriorityBuilder(fileName, fileNameResult, urlService, accessId, secretKey, projectName);
         project.getBuildersList().add(builder);
     }
 

@@ -12,20 +12,7 @@ import jenkins.model.Jenkins;
 import jenkins.tasks.SimpleBuildStep;
 import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
-import org.apache.hc.client5.http.ClientProtocolException;
-import org.apache.hc.client5.http.auth.AuthScope;
-import org.apache.hc.client5.http.auth.UsernamePasswordCredentials;
-import org.apache.hc.client5.http.classic.methods.HttpGet;
-import org.apache.hc.client5.http.classic.methods.HttpPost;
-import org.apache.hc.client5.http.impl.auth.BasicCredentialsProvider;
-import org.apache.hc.client5.http.impl.auth.BasicScheme;
-import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
-import org.apache.hc.client5.http.impl.classic.HttpClients;
-import org.apache.hc.client5.http.protocol.HttpClientContext;
-import org.apache.hc.core5.http.*;
-import org.apache.hc.core5.http.io.HttpClientResponseHandler;
-import org.apache.hc.core5.http.io.entity.EntityUtils;
-import org.apache.hc.core5.http.io.entity.StringEntity;
+import okhttp3.*;
 import org.jenkinsci.Symbol;
 import org.kohsuke.stapler.AncestorInPath;
 import org.kohsuke.stapler.DataBoundConstructor;
@@ -37,6 +24,7 @@ import java.io.IOException;
 public class PluginPriorityBuilder extends Builder implements SimpleBuildStep {
 
     public String fileName;
+    public String fileNameResult;
     public String urlService;
     public String accessId;
     public String projectName;
@@ -49,7 +37,7 @@ public class PluginPriorityBuilder extends Builder implements SimpleBuildStep {
     }
 
     @DataBoundConstructor
-    public PluginPriorityBuilder(String fileName, String urlService, String accessId, String secretKey, String projectName) {
+    public PluginPriorityBuilder(String fileName, String fileNameResult, String urlService, String accessId, String secretKey, String projectName) {
         this.fileName = fileName;
         this.urlService = urlService;
         this.projectName = projectName;
@@ -79,7 +67,6 @@ public class PluginPriorityBuilder extends Builder implements SimpleBuildStep {
     public void perform(Run<?, ?> run, FilePath workspace, EnvVars env, Launcher launcher, TaskListener listener) throws InterruptedException, IOException {
 
         PluginPriorityPublisher.pluginPriorityBuilder = this;
-        run.getCharacteristicEnvVars().putIfAbsent("VAR_TEST_TCP", "TEST");
         //todo ACTION envoi données sur serveur
         listener.getLogger().println("Connection  : " + urlService);
         listener.getLogger().println("Compte  : " + accessId);
@@ -88,13 +75,9 @@ public class PluginPriorityBuilder extends Builder implements SimpleBuildStep {
         System.out.println("BUILD_NUMBER");
         String buildNumber = env.get("BUILD_NUMBER");
         System.out.println(buildNumber);
-        System.out.println("GIT_COMMIT");
-        System.out.println(env.get("GIT_COMMIT"));
-        System.out.println("GET PROJECT");
+        System.out.println("WORKSPACE");
         System.out.println(workspace);
         String dataInFile = "{}";
-
-
         try {
             JSONObject projectResult = getProject();
             if (projectResult.size() == 0) {
@@ -104,7 +87,6 @@ public class PluginPriorityBuilder extends Builder implements SimpleBuildStep {
                 Object status = projectResult.get("status");
                 if (status!=null && status.toString().equals("404")){
                     listener.getLogger().println("Projet inconnu sur le service : " + projectName + " il est créé ");
-                    createProject();
                 }else{
                     listener.getLogger().println("Projet existant trouvé: " + projectName + "");
 
@@ -146,16 +128,14 @@ public class PluginPriorityBuilder extends Builder implements SimpleBuildStep {
             }else{
                 listener.getLogger().println("Priority list retrieved without error");
             }
-//            listener.getLogger().println("Récupération de la priorité des tests done");
             System.out.println("Récupération de la priorité des tests done");
-//            System.out.println(testCycleResult);
             try {
                 System.out.println("SAVE DATA TO TMP");
-                FilePath fpResult = workspace.createTextTempFile("dataResult", ".json", testCycleResult.toString());
-                FilePath child = fpResult.getParent().child("dataLastResult.json");
+                FilePath fpResult = workspace.createTextTempFile("dataResultPriority", ".json", testCycleResult.toString());
+                FilePath child = fpResult.getParent().child(fileNameResult);
                 if (child.exists()) child.delete();
                 fpResult.copyTo(child);
-                String fileNameResult = "dataResult_" + buildNumber + ".json";
+                String fileNameResult = "dataResultPriority" + buildNumber + ".json";
                 fpResult.renameTo(fpResult.getParent().child(fileNameResult));
                 System.out.println("COPY DATA");
 //            run.addAction(new PluginPrioAction(fileName, fileNameResult));
@@ -174,115 +154,66 @@ public class PluginPriorityBuilder extends Builder implements SimpleBuildStep {
 
     public JSONObject getProject() throws Exception {
         String uri = urlService + "/projects/" + projectName;
-        final HttpGet httpGet = new HttpGet(uri);
-        httpGet.setHeader("Accept", "application/json");
-        httpGet.setHeader("Content-type", "application/json");
-
-        try {
-            return executeRequest(httpGet);
-        } catch (Exception e) {
-            return JSONObject.fromObject("{}");
-        }
+        System.out.println(uri);
+        return executeRequest(uri, "GET", null);
     }
 
 
     private JSONObject createProject() throws Exception {
-        String uri = urlService + "/projects/";
+        String url = urlService+"/projects";
+        MediaType mediaType = MediaType.parse("application/json");
         JSONObject obj = new JSONObject();
         obj.put("testCycles", new JSONArray());
         obj.put("name", projectName);
-        String out = obj.toString();
-        StringEntity entity = new StringEntity(out);
-        final HttpPost httpPost = new HttpPost(uri);
-        httpPost.setHeader("Accept", "application/json");
-        httpPost.setHeader("Content-type", "application/json");
-        httpPost.setEntity(entity);
-        return executeRequest(httpPost);
+        String content = obj.toString();
+        RequestBody body = RequestBody.create(mediaType, content);
+        System.out.println("CALL CREATE");
+        return executeRequest(url,"POST",body);
 
     }
 
 
     private JSONObject sendTestCycleData(JSONObject testCycleData) throws Exception {
         String uri = urlService + "/projects/" + projectName + "/testCycles";
-        String strTestCyclesData = testCycleData.toString();
-        System.out.println("TEST CYCLES ATA");
-        System.out.println(strTestCyclesData);
-        StringEntity entity = new StringEntity(strTestCyclesData);
-        final HttpPost httpPost = new HttpPost(uri);
-        httpPost.setHeader("Accept", "application/json");
-        httpPost.setHeader("Content-type", "application/json");
-        httpPost.setEntity(entity);
-        return executeRequest(httpPost);
+        MediaType mediaType = MediaType.parse("application/json");
+        String content = testCycleData.toString();
+        RequestBody body = RequestBody.create(mediaType, content);
+        return executeRequest(uri, "POST", body);
     }
 
     private JSONObject getTestCycleDataTCP(String buildNumber) throws Exception {
         String uri = urlService + "/projects/" + projectName + "/testCycles/" + buildNumber + "/tcp";
         System.out.println("TCP URI");
         System.out.println(uri);
-        final HttpGet httpGet = new HttpGet(uri);
-        httpGet.setHeader("Accept", "application/json");
-        httpGet.setHeader("Content-type", "application/json");
-        return executeRequest(httpGet);
-    }
-
-    private HttpClientResponseHandler<String> createResponseHandler() {
-        return response -> {
-            System.out.println(response.getCode());
-            System.out.println(response.getReasonPhrase());
-            final int status = response.getCode();
-            if (status >= HttpStatus.SC_SUCCESS && status < HttpStatus.SC_REDIRECTION) {
-                final HttpEntity entity = response.getEntity();
-                try {
-                    return entity != null ? EntityUtils.toString(entity) : null;
-                } catch (final ParseException ex) {
-                    throw new ClientProtocolException(ex);
-                }
-            } else if (status == HttpStatus.SC_NOT_FOUND) {
-                return "{}";
-            } else {
-                throw new ClientProtocolException("Unexpected response status: " + status);
-            }
-        };
+        return executeRequest(uri, "GET",null);
     }
 
 
-    public JSONObject executeRequest(ClassicHttpRequest httpRequest) throws Exception {
-        System.out.println("DATA STORED");
-        System.out.println(urlService);
-        System.out.println(accessId);
-        System.out.println(secretKey);
-        System.out.println(projectName);
 
-        String urlHost = "";
-        int urlPort = 80;
-        if (urlService.contains(":")) {
-            if (urlService.contains("http")) {
-                String[] split = urlService.split(":");
-                urlHost = split[1].substring(2);
-                urlPort = Integer.parseInt(split[2]);
-            } else {
-                String[] split = urlService.split(":");
-                urlHost = split[0];
-                urlPort = Integer.parseInt(split[1]);
-            }
+    public JSONObject executeRequest(String url, String method, RequestBody body) throws Exception {
+
+        System.out.println("CREDENTIALS");
+        String credentials = Credentials.basic(accessId, secretKey);
+        OkHttpClient client = new OkHttpClient().newBuilder().build();
+        Request request = new Request.Builder().url(url)
+                .method(method, body)
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Accept", "application/json")
+                .addHeader("Authorization", credentials)
+                .build();
+        Response response = client.newCall(request).execute();
+        if (response.isSuccessful()){
+            System.out.println("SUCESSFUL");
+            return JSONObject.fromObject(response.body().string());
+        }else{
+            System.out.println("Status <> 200");
+            System.out.println(response.toString());
+            return JSONObject.fromObject("{}");
         }
-        final BasicScheme basicAuth = new BasicScheme();
-        basicAuth.initPreemptive(new UsernamePasswordCredentials(accessId, secretKey.toCharArray()));
-        final HttpHost target = new HttpHost("http", urlHost, urlPort);
-        final HttpClientContext localContext = HttpClientContext.create();
-        localContext.resetAuthExchange(target, basicAuth);
-        final BasicCredentialsProvider credsProvider = new BasicCredentialsProvider();
-        credsProvider.setCredentials(new AuthScope(urlHost, urlPort), new UsernamePasswordCredentials(accessId, secretKey.toCharArray()));
-        final CloseableHttpClient httpclient = HttpClients.custom().setDefaultCredentialsProvider(credsProvider).build();
-        final HttpClientResponseHandler<String> responseHandler = createResponseHandler();
-        System.out.println("REQUEST METHOD " + httpRequest.getMethod());
-        System.out.println("REQUEST URI " + httpRequest.getRequestUri());
-//        System.out.println("Entity " + httpRequest.getEntity().toString());
 
-        String execute = httpclient.execute(httpRequest, localContext, responseHandler);
-        System.out.println(execute);
-        return JSONObject.fromObject(execute);
     }
+
+
 
     @Symbol("plugin-tests-priority")
     @Extension
@@ -307,7 +238,7 @@ public class PluginPriorityBuilder extends Builder implements SimpleBuildStep {
                 @QueryParameter("projectName") final String projectName,
                 @AncestorInPath Job job
         ) throws IOException, ServletException {
-            PluginPriorityBuilder plugin = new PluginPriorityBuilder("none", urlService, accessId, secretKey, projectName);
+            PluginPriorityBuilder plugin = new PluginPriorityBuilder("none", "none", urlService, accessId, secretKey, projectName);
             try {
                 if (job == null) {
                     Jenkins.get().checkPermission(Jenkins.ADMINISTER);
@@ -317,8 +248,10 @@ public class PluginPriorityBuilder extends Builder implements SimpleBuildStep {
                 System.out.println("GET PROJECT");
                 JSONObject projectResult = plugin.getProject();
                 if (projectResult.size() == 0) {
+                    plugin.createProject();
                     return FormValidation.ok("Nouveau projet spécifié, il sera créé lors du build");
                 } else {
+                    System.out.println(projectResult.toString());
                     Object status = projectResult.get("status");
                     if (status!=null && status.toString().equals("404")){
                         return FormValidation.ok("Nouveau projet spécifié, il sera créé lors du build");

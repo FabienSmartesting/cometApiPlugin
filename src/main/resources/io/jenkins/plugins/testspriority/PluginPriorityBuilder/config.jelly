@@ -3,8 +3,11 @@
 <f:entry title="${%FileName}" field="fileName">
     <f:textbox  value="dataTests.json" />
 </f:entry>
+    <f:entry title="${%FileNameResult}" field="fileNameResult">
+        <f:textbox  value="dataLastResultPriority.json" />
+    </f:entry>
 <f:entry title="${%UrlService}" field="urlService">
-    <f:textbox  value="http://192.168.39.67:3025"/>
+    <f:textbox  value="https://cometserversma.herokuapp.com"/>
 </f:entry>
 <f:entry title="${%AccessID}" field="accessId">
     <f:textbox  value="admin" />
