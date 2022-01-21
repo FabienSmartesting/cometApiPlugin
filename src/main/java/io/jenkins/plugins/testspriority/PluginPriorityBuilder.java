@@ -39,6 +39,7 @@ public class PluginPriorityBuilder extends Builder implements SimpleBuildStep {
     @DataBoundConstructor
     public PluginPriorityBuilder(String fileName, String fileNameResult, String urlService, String accessId, String secretKey, String projectName) {
         this.fileName = fileName;
+        this.fileNameResult = fileNameResult;
         this.urlService = urlService;
         this.projectName = projectName;
         this.accessId = accessId;
@@ -96,10 +97,11 @@ public class PluginPriorityBuilder extends Builder implements SimpleBuildStep {
             listener.getLogger().println("Erreur lors du check/creation du projet!");
         }
 
-
+        boolean foundData=false;
         for (FilePath filePath : workspace.list()) {
             if (filePath.getName().equals(fileName)) {
                 try {
+                    foundData=true;
                     dataInFile = filePath.readToString();
                 } catch (Exception e) {
                     listener.getLogger().println("Erreur lors de la lecture du fichier dans le worksapce");
@@ -107,48 +109,52 @@ public class PluginPriorityBuilder extends Builder implements SimpleBuildStep {
             }
 
         }
-        //data send to service
-        FilePath fp = workspace.createTextTempFile("data", ".json", dataInFile);
-        String fileNameSend = "dataSend_" + buildNumber + ".json";
-        fp.renameTo(fp.getParent().child(fileNameSend));
-        JSONObject testCycleData = JSONObject.fromObject(dataInFile);
-        testCycleData.put("id", buildNumber);
-
-        try {
-            listener.getLogger().println("Envoi des données des tests au service");
-
-            sendTestCycleData(testCycleData);
-            listener.getLogger().println("Récupération de la priorité des tests");
-            System.out.println("Récupération de la priorité des tests");
-            JSONObject testCycleResult = getTestCycleDataTCP(buildNumber);
-            Object status = testCycleResult.get("status");
-            if (status!=null && status.toString().equalsIgnoreCase("error")) {
-                listener.getLogger().println("Error on priority list retrieval");
-                listener.getLogger().println( testCycleResult.get("message"));
-            }else{
-                listener.getLogger().println("Priority list retrieved without error");
-            }
-            System.out.println("Récupération de la priorité des tests done");
+        if (foundData){
+            //data send to service
+            FilePath fp = workspace.createTextTempFile("data", ".json", dataInFile);
+            String fileNameSend = "dataSend_" + buildNumber + ".json";
+            fp.renameTo(fp.getParent().child(fileNameSend));
+            JSONObject testCycleData = JSONObject.fromObject(dataInFile);
+            testCycleData.put("id", buildNumber);
             try {
-                System.out.println("SAVE DATA TO TMP");
-                FilePath fpResult = workspace.createTextTempFile("dataResultPriority", ".json", testCycleResult.toString());
-                FilePath child = fpResult.getParent().child(fileNameResult);
-                if (child.exists()) child.delete();
-                fpResult.copyTo(child);
-                String fileNameResult = "dataResultPriority" + buildNumber + ".json";
-                fpResult.renameTo(fpResult.getParent().child(fileNameResult));
-                System.out.println("COPY DATA");
+                listener.getLogger().println("Envoi des données des tests au service");
+                sendTestCycleData(testCycleData);
+                listener.getLogger().println("Récupération de la priorité des tests");
+                System.out.println("Récupération de la priorité des tests");
+                JSONObject testCycleResult = getTestCycleDataTCP(buildNumber);
+                Object status = testCycleResult.get("status");
+                if (status!=null && status.toString().equalsIgnoreCase("error")) {
+                    listener.getLogger().println("Erreur lors de la récupération de la liste priorisée");
+                    listener.getLogger().println( testCycleResult.get("message"));
+                }else{
+                    listener.getLogger().println("Liste récupéré avec succès");
+                }
+                System.out.println("Récupération de la priorité des tests done");
+                try {
+                    System.out.println("SAVE DATA TO TMP");
+                    System.out.println("CREATE TMP FILE");
+                    FilePath fpResult = workspace.createTextTempFile("dataResultPriority", ".json", testCycleResult.toString());
+                    System.out.println("DEFINE RESULT FILE");
+                    FilePath child = workspace.child(fileNameResult);
+                    System.out.println("DELETE RESULT FILE IF ANY");
+                    if (child.exists()) child.delete();
+                    System.out.println("COPY TO RESULT FILE");
+                    fpResult.copyTo(child);
+                    String fileNameResultForBuild = "dataResultPriority_" + buildNumber + ".json";
+                    fpResult.renameTo(fpResult.getParent().child(fileNameResultForBuild));
+                    System.out.println("COPY DATA");
 //            run.addAction(new PluginPrioAction(fileName, fileNameResult));
+                } catch (Exception e) {
+                    System.out.println(e.getMessage());
+                    listener.getLogger().println("Erreur lors du traitement des données reçues");
+                }
             } catch (Exception e) {
                 System.out.println(e.getMessage());
-                listener.getLogger().println("Erreur lors du traitement des données reçues");
+                listener.getLogger().println("Erreur lors de l'envoi des données au service");
             }
-        } catch (Exception e) {
-            System.out.println(e.getMessage());
-            listener.getLogger().println("Erreur lors de l'envoi des données au service");
+        }else{
+            listener.getLogger().println("Fichier non trouvé : Pas de données envoyées au service");
         }
-
-
     }
 
 

@@ -57,6 +57,19 @@ public class PluginPriorityPublisher  extends Publisher {
         System.out.println(build.getBuildStatusSummary());
 
 
+        System.out.println("TEST ARTIFACT");
+        List<Run.Artifact> artifacts = build.getArtifacts();
+        if (artifacts.isEmpty()) {
+            listener.getLogger().println("No artifacts found");
+        }
+        for (Run.Artifact artifact : artifacts) {
+            listener.getLogger().println("Artifact");
+            listener.getLogger().println(artifact.getFileName());
+            listener.getLogger().println("Artifact size");
+            listener.getLogger().println(artifact.getFileSize());
+//            multipart.addFormDataPart(artifact.getFileName(), artifact.getFileName(), RequestBody.create(null, artifact.getFile()));
+        }
+
         if (build.getResult()==Result.SUCCESS){
             for(FilePath filePath : build.getWorkspace().list()){
 //                System.out.println(filePath.getName());
